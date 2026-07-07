@@ -1,0 +1,70 @@
+export const QUOTE_TIMEOUT_MS = 25_000;
+
+/**
+ * Per-provider serialization with a minimum gap between calls, so a
+ * full-matrix refresh doesn't trip upstream rate limits (Kyber 3rps,
+ * Rango demo key, Socket public endpoint...).
+ */
+const chains: Record<string, Promise<void>> = {};
+
+export function throttled<T>(key: string, minGapMs: number, fn: () => Promise<T>): Promise<T> {
+  const prev = chains[key] ?? Promise.resolve();
+  let release!: () => void;
+  chains[key] = new Promise<void>((res) => (release = res));
+  return prev.then(async () => {
+    try {
+      return await fn();
+    } finally {
+      setTimeout(release, minGapMs);
+    }
+  });
+}
+
+const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
+
+const BACKOFFS_MS = [3_000, 8_000];
+
+/**
+ * Hosts that kept returning 429 after retries get a cooldown during which
+ * we fail fast (single attempt), so one exhausted provider can't stall a
+ * whole matrix refresh behind backoff sleeps.
+ */
+const BREAKER_MS = 180_000;
+const brokenUntil = new Map<string, number>();
+
+export async function fetchJson(
+  url: string,
+  init: RequestInit = {},
+): Promise<{ ok: boolean; status: number; body: unknown }> {
+  const host = new URL(url).host;
+  const tripped = (brokenUntil.get(host) ?? 0) > Date.now();
+
+  let res = await fetch(url, { ...init, signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) });
+  if (!tripped) {
+    for (const backoff of BACKOFFS_MS) {
+      if (res.status !== 429) break;
+      await sleep(backoff);
+      res = await fetch(url, { ...init, signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) });
+    }
+  }
+  if (res.status === 429) brokenUntil.set(host, Date.now() + BREAKER_MS);
+  else brokenUntil.delete(host);
+  let body: unknown = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = await res.text().catch(() => null);
+  }
+  return { ok: res.ok, status: res.status, body };
+}
+
+export function errMessage(body: unknown, fallback: string): string {
+  if (body && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+    for (const key of ["message", "msg", "error"]) {
+      if (typeof b[key] === "string" && b[key]) return b[key] as string;
+    }
+  }
+  if (typeof body === "string" && body) return body.slice(0, 200);
+  return fallback;
+}
