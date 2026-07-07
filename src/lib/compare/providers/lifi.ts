@@ -33,6 +33,7 @@ export async function quoteLifi(req: QuoteRequest): Promise<ProviderQuote> {
     fromAddress: addressFor(route.from.chain),
     toAddress: addressFor(route.to.chain),
     integrator: "rhea-bench",
+    order: "CHEAPEST", // best received amount — matches what Jumper displays as 最佳报价
   });
 
   const headers: Record<string, string> = {};

@@ -9,7 +9,7 @@ const cache = new Map<string, { at: number; promise: Promise<CompareResult> }>()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const routeId = String(req.query.route ?? "");
-  const tier = Number(req.query.tier ?? 1);
+  const tier = Number(req.query.tier ?? 1); // legacy preset fallback when no amount given
 
   const route = ROUTES.find((r) => r.id === routeId);
   if (!route) return res.status(400).json({ error: `unknown route: ${routeId}` });

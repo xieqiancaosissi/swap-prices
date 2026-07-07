@@ -34,23 +34,20 @@ body {
 .bench-logo b { font-size: 19px; letter-spacing: -0.2px; }
 .bench-logo span { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
 .bench-spacer { flex: 1; }
-.seg { display: flex; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; overflow: hidden; }
-.seg button { padding: 7px 16px; font-size: 13px; color: var(--ink2); border-right: 1px solid var(--line); cursor: pointer; background: none; }
-.seg button:last-child { border-right: 0; }
-.seg button.on { background: var(--accent); color: #fff; font-weight: 600; }
-.seg button:disabled { cursor: default; opacity: 0.6; }
 .stamp { font-size: 12.5px; color: var(--muted); }
 .refresh-btn { background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 8px; cursor: pointer; }
 .refresh-btn:disabled { opacity: 0.5; cursor: default; }
 
-/* custom amount */
-.amt-form { display: flex; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; overflow: hidden; }
-.amt-form.on { border-color: var(--accent); }
-.amt-form input { width: 130px; padding: 7px 12px; font-size: 13px; color: var(--ink); background: none; outline: none; }
-.amt-form input::placeholder { color: var(--muted); }
-.amt-form button { padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--accent); border-left: 1px solid var(--line); cursor: pointer; background: none; }
-.amt-form.on button { background: var(--accent); color: #fff; }
-.amt-form button:disabled { color: var(--muted); cursor: default; background: none; }
+/* token-in amount */
+.amt-form { display: flex; align-items: stretch; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(20, 23, 28, 0.05); transition: border-color 0.15s, box-shadow 0.15s; }
+.amt-form:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.amt-form.invalid:focus-within { border-color: var(--bad); box-shadow: 0 0 0 3px #f9ecec; }
+.amt-label { display: flex; align-items: center; padding: 0 12px; font-size: 11px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); background: #f8f9fa; border-right: 1px solid var(--line); }
+.amt-form input { width: 150px; padding: 9px 14px; font-size: 15px; font-weight: 600; color: var(--ink); background: none; outline: none; font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.amt-form input::placeholder { color: #c2c6cd; font-weight: 400; }
+.amt-form button { padding: 0 18px; font-size: 13px; font-weight: 700; color: #fff; background: var(--accent); cursor: pointer; }
+.amt-form button:hover:not(:disabled) { background: #2065b8; }
+.amt-form button:disabled { background: #c2c6cd; cursor: default; }
 
 /* stat tiles */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }

@@ -1,6 +1,8 @@
 import Head from "next/head";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ROUTES, TIERS } from "@/lib/compare/config";
+import { ROUTES } from "@/lib/compare/config";
+
+const DEFAULT_AMOUNT = "1";
 import type { CompareResult, ProviderKey, ProviderQuote, RouteDef } from "@/lib/compare/types";
 
 const PROVIDER_COLS: Array<{ key: ProviderKey; label: string }> = [
@@ -28,7 +30,7 @@ type RowState = CompareResult | "loading" | undefined;
 /** short on-cell reason so failures are diagnosable without hovering */
 function errLabel(e?: string): string {
   if (!e) return "ERR";
-  if (/429/.test(e)) return "429";
+  if (/429|rate limit|too many/i.test(e)) return "429";
   if (/no route|no liquidity/i.test(e)) return "no route";
   if (/timeout|abort/i.test(e)) return "timeout";
   return "ERR";
@@ -53,26 +55,26 @@ function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
 }
 
 export default function Home() {
-  const [tier, setTier] = useState(1);
-  const [customAmt, setCustomAmt] = useState("");
-  const [activeAmt, setActiveAmt] = useState<string | null>(null); // null = preset tiers
+  const [amtInput, setAmtInput] = useState(DEFAULT_AMOUNT);
+  const [activeAmt, setActiveAmt] = useState(DEFAULT_AMOUNT); // amount behind the current table
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const runId = useRef(0);
 
-  const refresh = useCallback(async (tierNow: number, amount: string | null = null) => {
+  const refresh = useCallback(async (amount: string) => {
     const id = ++runId.current;
     setRunning(true);
     setRows(Object.fromEntries(ROUTES.map((r) => [r.id, "loading" as const])));
 
     // small concurrency to stay friendly with everyone's rate limits
     const queue = [...ROUTES];
-    const amountParam = amount ? `&amount=${encodeURIComponent(amount)}` : "";
     const worker = async () => {
       for (let r = queue.shift(); r; r = queue.shift()) {
         try {
-          const res = await fetch(`/api/compare?route=${r.id}&tier=${tierNow}${amountParam}`);
+          const res = await fetch(
+            `/api/compare?route=${r.id}&amount=${encodeURIComponent(amount)}`,
+          );
           const data: CompareResult = await res.json();
           if (runId.current !== id) return;
           setRows((prev) => ({ ...prev, [r.id]: data }));
@@ -90,22 +92,16 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => refresh(1), 0); // initial load, deferred out of the effect body
+    // initial load, deferred out of the effect body
+    const t = setTimeout(() => refresh(DEFAULT_AMOUNT), 0);
     return () => clearTimeout(t);
   }, [refresh]);
 
-  const switchTier = (t: number) => {
-    if (running || (t === tier && activeAmt === null)) return;
-    setTier(t);
-    setActiveAmt(null);
-    refresh(t);
-  };
-
-  const customValid = /^\d{1,12}(\.\d{1,18})?$/.test(customAmt) && Number(customAmt) > 0;
-  const quoteCustom = () => {
-    if (running || !customValid) return;
-    setActiveAmt(customAmt);
-    refresh(tier, customAmt);
+  const amtValid = /^\d{1,12}(\.\d{1,18})?$/.test(amtInput) && Number(amtInput) > 0;
+  const quote = () => {
+    if (running || !amtValid) return;
+    setActiveAmt(amtInput);
+    refresh(amtInput);
   };
 
   // ---- stat tiles ----
@@ -139,36 +135,29 @@ export default function Home() {
             <span>vs 5 aggregators</span>
           </div>
           <div className="bench-spacer" />
-          <div className="seg">
-            {TIERS.map((t, i) => (
-              <button
-                key={t.label}
-                className={i === tier && activeAmt === null ? "on" : ""}
-                disabled={running}
-                onClick={() => switchTier(i)}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className={`amt-form ${activeAmt !== null ? "on" : ""}`}>
+          <div className={`amt-form ${amtValid ? "" : "invalid"}`}>
+            <span className="amt-label">Token in</span>
             <input
-              value={customAmt}
+              value={amtInput}
               disabled={running}
-              placeholder="custom amount"
-              onChange={(e) => setCustomAmt(e.target.value.trim())}
-              onKeyDown={(e) => e.key === "Enter" && quoteCustom()}
+              inputMode="decimal"
+              placeholder="e.g. 0.1"
+              onChange={(e) => setAmtInput(e.target.value.trim())}
+              onKeyDown={(e) => e.key === "Enter" && quote()}
               title="amount of each route's input token (BTC routes get this many BTC, USDT routes this many USDT, …)"
             />
-            <button disabled={running || !customValid} onClick={quoteCustom}>
+            <button disabled={running || !amtValid} onClick={quote}>
               Quote
             </button>
           </div>
           <div className="stamp">
-            {activeAmt !== null && !running ? `input = ${activeAmt} of each route's token · ` : ""}
-            {running ? "fetching live quotes…" : updatedAt ? `updated ${updatedAt}` : ""}
+            {running
+              ? "fetching live quotes…"
+              : updatedAt
+                ? `input = ${activeAmt} of each route's token · updated ${updatedAt}`
+                : ""}
           </div>
-          <button className="refresh-btn" disabled={running} onClick={() => refresh(tier)}>
+          <button className="refresh-btn" disabled={running} onClick={() => refresh(activeAmt)}>
             {running ? "Refreshing…" : "Refresh now"}
           </button>
         </div>
