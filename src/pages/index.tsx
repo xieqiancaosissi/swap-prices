@@ -25,6 +25,15 @@ function fmtAmount(v: number, sym: string): string {
 
 type RowState = CompareResult | "loading" | undefined;
 
+/** short on-cell reason so failures are diagnosable without hovering */
+function errLabel(e?: string): string {
+  if (!e) return "ERR";
+  if (/429/.test(e)) return "429";
+  if (/no route|no liquidity/i.test(e)) return "no route";
+  if (/timeout|abort/i.test(e)) return "timeout";
+  return "ERR";
+}
+
 interface CellView {
   quote?: ProviderQuote;
   bps: number | null;
@@ -45,22 +54,25 @@ function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
 
 export default function Home() {
   const [tier, setTier] = useState(1);
+  const [customAmt, setCustomAmt] = useState("");
+  const [activeAmt, setActiveAmt] = useState<string | null>(null); // null = preset tiers
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const runId = useRef(0);
 
-  const refresh = useCallback(async (tierNow: number) => {
+  const refresh = useCallback(async (tierNow: number, amount: string | null = null) => {
     const id = ++runId.current;
     setRunning(true);
     setRows(Object.fromEntries(ROUTES.map((r) => [r.id, "loading" as const])));
 
     // small concurrency to stay friendly with everyone's rate limits
     const queue = [...ROUTES];
+    const amountParam = amount ? `&amount=${encodeURIComponent(amount)}` : "";
     const worker = async () => {
       for (let r = queue.shift(); r; r = queue.shift()) {
         try {
-          const res = await fetch(`/api/compare?route=${r.id}&tier=${tierNow}`);
+          const res = await fetch(`/api/compare?route=${r.id}&tier=${tierNow}${amountParam}`);
           const data: CompareResult = await res.json();
           if (runId.current !== id) return;
           setRows((prev) => ({ ...prev, [r.id]: data }));
@@ -83,9 +95,17 @@ export default function Home() {
   }, [refresh]);
 
   const switchTier = (t: number) => {
-    if (t === tier || running) return;
+    if (running || (t === tier && activeAmt === null)) return;
     setTier(t);
+    setActiveAmt(null);
     refresh(t);
+  };
+
+  const customValid = /^\d{1,12}(\.\d{1,18})?$/.test(customAmt) && Number(customAmt) > 0;
+  const quoteCustom = () => {
+    if (running || !customValid) return;
+    setActiveAmt(customAmt);
+    refresh(tier, customAmt);
   };
 
   // ---- stat tiles ----
@@ -123,7 +143,7 @@ export default function Home() {
             {TIERS.map((t, i) => (
               <button
                 key={t.label}
-                className={i === tier ? "on" : ""}
+                className={i === tier && activeAmt === null ? "on" : ""}
                 disabled={running}
                 onClick={() => switchTier(i)}
               >
@@ -131,7 +151,21 @@ export default function Home() {
               </button>
             ))}
           </div>
+          <div className={`amt-form ${activeAmt !== null ? "on" : ""}`}>
+            <input
+              value={customAmt}
+              disabled={running}
+              placeholder="custom amount"
+              onChange={(e) => setCustomAmt(e.target.value.trim())}
+              onKeyDown={(e) => e.key === "Enter" && quoteCustom()}
+              title="amount of each route's input token (BTC routes get this many BTC, USDT routes this many USDT, …)"
+            />
+            <button disabled={running || !customValid} onClick={quoteCustom}>
+              Quote
+            </button>
+          </div>
           <div className="stamp">
+            {activeAmt !== null && !running ? `input = ${activeAmt} of each route's token · ` : ""}
             {running ? "fetching live quotes…" : updatedAt ? `updated ${updatedAt}` : ""}
           </div>
           <button className="refresh-btn" disabled={running} onClick={() => refresh(tier)}>
@@ -223,7 +257,7 @@ export default function Home() {
                         return (
                           <td key={p.key} className={`cell${us}`}>
                             <span className="cell-err" title={quote.error}>
-                              ERR
+                              {errLabel(quote.error)}
                             </span>
                           </td>
                         );

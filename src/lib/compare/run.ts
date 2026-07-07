@@ -25,8 +25,12 @@ export const PROVIDER_ORDER: ProviderKey[] = [
   "kyber",
 ];
 
-export async function runCompare(route: RouteDef, tier: number): Promise<CompareResult> {
-  const amountInHuman = TIERS[tier].amounts[route.from.sym];
+export async function runCompare(
+  route: RouteDef,
+  tier: number,
+  amountOverride?: string,
+): Promise<CompareResult> {
+  const amountInHuman = amountOverride ?? TIERS[tier].amounts[route.from.sym];
   const req: QuoteRequest = {
     route,
     amountInHuman,

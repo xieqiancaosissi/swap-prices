@@ -34,7 +34,7 @@ export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
     apiKey,
   });
 
-  const { ok, status, body } = await throttled("rango", 1_500, () =>
+  const { ok, status, body } = await throttled("rango", 2_500, () =>
     fetchJson(`https://public-api.rango.exchange/basic/quote?${params}`),
   );
 

@@ -17,10 +17,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(400).json({ error: `tier must be 0..${TIERS.length - 1}` });
   }
 
-  const key = `${routeId}:${tier}`;
+  // optional custom input amount (human units of the route's from-token)
+  const amountRaw = req.query.amount ? String(req.query.amount) : undefined;
+  if (amountRaw && (!/^\d{1,12}(\.\d{1,18})?$/.test(amountRaw) || Number(amountRaw) <= 0)) {
+    return res.status(400).json({ error: "amount must be a positive decimal" });
+  }
+
+  const key = `${routeId}:${tier}:${amountRaw ?? ""}`;
   const hit = cache.get(key);
   const fresh = hit && Date.now() - hit.at < CACHE_TTL_MS;
-  const entry = fresh ? hit : { at: Date.now(), promise: runCompare(route, tier) };
+  const entry = fresh ? hit : { at: Date.now(), promise: runCompare(route, tier, amountRaw) };
   if (!fresh) cache.set(key, entry);
 
   try {

@@ -43,6 +43,15 @@ body {
 .refresh-btn { background: var(--accent); color: #fff; font-size: 13px; font-weight: 600; padding: 8px 18px; border-radius: 8px; cursor: pointer; }
 .refresh-btn:disabled { opacity: 0.5; cursor: default; }
 
+/* custom amount */
+.amt-form { display: flex; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; overflow: hidden; }
+.amt-form.on { border-color: var(--accent); }
+.amt-form input { width: 130px; padding: 7px 12px; font-size: 13px; color: var(--ink); background: none; outline: none; }
+.amt-form input::placeholder { color: var(--muted); }
+.amt-form button { padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--accent); border-left: 1px solid var(--line); cursor: pointer; background: none; }
+.amt-form.on button { background: var(--accent); color: #fff; }
+.amt-form button:disabled { color: var(--muted); cursor: default; background: none; }
+
 /* stat tiles */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
 .tile { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 14px; }
