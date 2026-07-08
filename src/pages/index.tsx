@@ -9,7 +9,7 @@ import type {
   RouteDef,
 } from "@/lib/compare/types";
 
-const DEFAULT_PAIR = "usdt-usdc";
+const DEFAULT_PAIR = "btc-eth";
 
 /** sensible starting token-in amount per source asset */
 const DEFAULT_AMOUNT: Record<AssetSym, string> = {
@@ -18,6 +18,10 @@ const DEFAULT_AMOUNT: Record<AssetSym, string> = {
   USDT: "10",
   USDC: "10",
 };
+
+/** amount the page opens with, matching the default pair's source token */
+const INITIAL_AMOUNT =
+  DEFAULT_AMOUNT[endpointsOf(PAIRS.find((p) => p.id === DEFAULT_PAIR)!, "forward").from];
 
 const ALL_COLS: Array<{ key: ProviderKey; label: string }> = [
   { key: "rhea", label: "Rhea (us)" },
@@ -121,8 +125,8 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
 
   const [pairId, setPairId] = useState(DEFAULT_PAIR);
   const [dir, setDir] = useState<Direction>("forward");
-  const [amtInput, setAmtInput] = useState(DEFAULT_AMOUNT.USDT);
-  const [activeAmt, setActiveAmt] = useState(DEFAULT_AMOUNT.USDT);
+  const [amtInput, setAmtInput] = useState(INITIAL_AMOUNT);
+  const [activeAmt, setActiveAmt] = useState(INITIAL_AMOUNT);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
@@ -179,7 +183,7 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
   }, []);
 
   useEffect(() => {
-    const t = setTimeout(() => refresh(routesFor(DEFAULT_PAIR, "forward"), DEFAULT_AMOUNT.USDT), 0);
+    const t = setTimeout(() => refresh(routesFor(DEFAULT_PAIR, "forward"), INITIAL_AMOUNT), 0);
     return () => clearTimeout(t);
   }, [refresh]);
 
