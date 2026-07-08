@@ -19,11 +19,18 @@ export const PROVIDERS: Record<ProviderKey, (req: QuoteRequest) => Promise<Provi
 export const PROVIDER_ORDER: ProviderKey[] = [
   "rhea",
   "lifi",
-  "bungee",
-  "rango",
   "swapkit",
+  "rango",
+  "bungee",
   "kyber",
 ];
+
+/** Bungee stays hidden until a Socket key is configured (its keyless endpoint just 429s) */
+export const bungeeEnabled = () => !!process.env.SOCKET_API_KEY;
+
+export function activeProviders(): ProviderKey[] {
+  return PROVIDER_ORDER.filter((k) => k !== "bungee" || bungeeEnabled());
+}
 
 export async function runCompare(route: RouteDef, amountInHuman: string): Promise<CompareResult> {
   const req: QuoteRequest = {
@@ -33,7 +40,7 @@ export async function runCompare(route: RouteDef, amountInHuman: string): Promis
   };
 
   const quotes = await Promise.all(
-    PROVIDER_ORDER.map(async (key): Promise<ProviderQuote> => {
+    activeProviders().map(async (key): Promise<ProviderQuote> => {
       try {
         return await PROVIDERS[key](req);
       } catch (e) {

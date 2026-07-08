@@ -1,18 +1,31 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PAIRS, endpointsOf, routesFor, type Direction } from "@/lib/compare/config";
-import type { CompareResult, ProviderKey, ProviderQuote, RouteDef } from "@/lib/compare/types";
+import type {
+  AssetSym,
+  CompareResult,
+  ProviderKey,
+  ProviderQuote,
+  RouteDef,
+} from "@/lib/compare/types";
 
-const DEFAULT_AMOUNT = "1";
 const DEFAULT_PAIR = "usdt-usdc";
 
-const PROVIDER_COLS: Array<{ key: ProviderKey; label: string }> = [
+/** sensible starting token-in amount per source asset */
+const DEFAULT_AMOUNT: Record<AssetSym, string> = {
+  BTC: "0.001",
+  ETH: "0.1",
+  USDT: "10",
+  USDC: "10",
+};
+
+const ALL_COLS: Array<{ key: ProviderKey; label: string }> = [
   { key: "rhea", label: "Rhea (us)" },
   { key: "lifi", label: "LiFi / Jumper" },
   { key: "swapkit", label: "SwapKit" },
-  { key: "kyber", label: "Kyber" },
   { key: "rango", label: "Rango" },
   { key: "bungee", label: "Bungee" },
+  { key: "kyber", label: "Kyber" },
 ];
 
 const CHAIN_LABEL = (r: RouteDef) =>
@@ -54,38 +67,52 @@ function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
   return { quote, bps, isBest: quote.amountOutHuman === best };
 }
 
-export default function Home() {
+const isValidAmount = (v: string) => /^\d{1,12}(\.\d{1,18})?$/.test(v) && Number(v) > 0;
+
+export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
+  const cols = useMemo(
+    () => ALL_COLS.filter((c) => c.key !== "bungee" || bungeeEnabled),
+    [bungeeEnabled],
+  );
+
   const [pairId, setPairId] = useState(DEFAULT_PAIR);
   const [dir, setDir] = useState<Direction>("forward");
-  const [amtInput, setAmtInput] = useState(DEFAULT_AMOUNT);
-  const [activeAmt, setActiveAmt] = useState(DEFAULT_AMOUNT);
+  const [amtInput, setAmtInput] = useState(DEFAULT_AMOUNT.USDT);
+  const [activeAmt, setActiveAmt] = useState(DEFAULT_AMOUNT.USDT);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const runId = useRef(0);
+  const abortRef = useRef<AbortController | null>(null);
 
   const pair = PAIRS.find((p) => p.id === pairId)!;
   const ends = endpointsOf(pair, dir);
   const routes = useMemo(() => routesFor(pairId, dir), [pairId, dir]);
 
   const refresh = useCallback(async (routeList: RouteDef[], amount: string) => {
+    // cancel any in-flight run so a new selection takes over immediately
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
     const id = ++runId.current;
+
     setRunning(true);
     setRows(Object.fromEntries(routeList.map((r) => [r.id, "loading" as const])));
 
-    // small concurrency to stay friendly with everyone's rate limits
     const queue = [...routeList];
     const worker = async () => {
       for (let r = queue.shift(); r; r = queue.shift()) {
+        if (ac.signal.aborted) return;
         try {
           const res = await fetch(
             `/api/compare?route=${encodeURIComponent(r.id)}&amount=${encodeURIComponent(amount)}`,
+            { signal: ac.signal },
           );
           const data: CompareResult = await res.json();
           if (runId.current !== id) return;
           setRows((prev) => ({ ...prev, [r.id]: data }));
         } catch {
-          if (runId.current !== id) return;
+          if (runId.current !== id || ac.signal.aborted) return;
           setRows((prev) => ({ ...prev, [r.id]: undefined }));
         }
       }
@@ -98,17 +125,41 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // load whenever pair/direction changes (and on mount), using the committed amount
-    const t = setTimeout(() => refresh(routesFor(pairId, dir), activeAmt), 0);
+    const t = setTimeout(() => refresh(routesFor(DEFAULT_PAIR, "forward"), DEFAULT_AMOUNT.USDT), 0);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pairId, dir]);
+  }, [refresh]);
 
-  const amtValid = /^\d{1,12}(\.\d{1,18})?$/.test(amtInput) && Number(amtInput) > 0;
+  // switching pair / direction resets the amount to the new source-token default and reloads
+  const selectPair = (id: string) => {
+    if (id === pairId) return;
+    const p = PAIRS.find((x) => x.id === id)!;
+    const amt = DEFAULT_AMOUNT[endpointsOf(p, dir).from];
+    setPairId(id);
+    setAmtInput(amt);
+    setActiveAmt(amt);
+    refresh(routesFor(id, dir), amt);
+  };
+
+  const flipDir = () => {
+    const nd: Direction = dir === "forward" ? "reverse" : "forward";
+    const amt = DEFAULT_AMOUNT[endpointsOf(pair, nd).from];
+    setDir(nd);
+    setAmtInput(amt);
+    setActiveAmt(amt);
+    refresh(routesFor(pairId, nd), amt);
+  };
+
+  const amtValid = isValidAmount(amtInput);
   const quote = () => {
-    if (running || !amtValid) return;
+    if (!amtValid) return;
     setActiveAmt(amtInput);
     refresh(routes, amtInput);
+  };
+
+  const stop = () => {
+    abortRef.current?.abort();
+    runId.current++;
+    setRunning(false);
   };
 
   // ---- stat tiles (over the current pair's routes) ----
@@ -128,7 +179,7 @@ export default function Home() {
   );
   const worstRoute = worst ? routes.find((r) => r.id === worst.row.routeId) : undefined;
   const okQuotes = loaded.flatMap((r) => r.quotes).filter((q) => q.status === "ok").length;
-  const totalQuotes = loaded.length * PROVIDER_COLS.length;
+  const totalQuotes = loaded.length * cols.length;
 
   return (
     <>
@@ -139,23 +190,29 @@ export default function Home() {
         <div className="bench-top">
           <div className="bench-logo">
             <b>Rhea · Quote Benchmark</b>
-            <span>vs 5 aggregators</span>
+            <span>vs aggregators</span>
           </div>
           <div className="bench-spacer" />
           <div className="stamp">
-            {running
-              ? "fetching live quotes…"
-              : updatedAt
-                ? `input ${activeAmt} ${ends.from} · updated ${updatedAt}`
-                : ""}
+            {running ? (
+              <span className="running-tag">
+                <span className="spinner" /> pricing {ends.from} → {ends.to}…
+              </span>
+            ) : updatedAt ? (
+              `input ${activeAmt} ${ends.from} · updated ${updatedAt}`
+            ) : (
+              ""
+            )}
           </div>
-          <button
-            className="refresh-btn"
-            disabled={running}
-            onClick={() => refresh(routes, activeAmt)}
-          >
-            {running ? "Refreshing…" : "Refresh now"}
-          </button>
+          {running ? (
+            <button className="refresh-btn stop" onClick={stop}>
+              Stop
+            </button>
+          ) : (
+            <button className="refresh-btn" onClick={() => refresh(routes, activeAmt)}>
+              Refresh
+            </button>
+          )}
         </div>
 
         <div className="controls">
@@ -164,19 +221,13 @@ export default function Home() {
               <button
                 key={p.id}
                 className={p.id === pairId ? "on" : ""}
-                disabled={running}
-                onClick={() => p.id !== pairId && setPairId(p.id)}
+                onClick={() => selectPair(p.id)}
               >
                 {p.a} · {p.b}
               </button>
             ))}
           </div>
-          <button
-            className="dir-toggle"
-            disabled={running}
-            onClick={() => setDir((d) => (d === "forward" ? "reverse" : "forward"))}
-            title="swap direction"
-          >
+          <button className="dir-toggle" onClick={flipDir} title="swap direction">
             <b>{ends.from}</b>
             <span className="dir-arrow">→</span>
             <b>{ends.to}</b>
@@ -187,14 +238,13 @@ export default function Home() {
             <span className="amt-label">Token in</span>
             <input
               value={amtInput}
-              disabled={running}
               inputMode="decimal"
               placeholder="e.g. 0.1"
               onChange={(e) => setAmtInput(e.target.value.trim())}
               onKeyDown={(e) => e.key === "Enter" && quote()}
               title={`amount of ${ends.from} to swap on every route`}
             />
-            <button disabled={running || !amtValid} onClick={quote}>
+            <button disabled={!amtValid} onClick={quote}>
               Quote
             </button>
           </div>
@@ -242,7 +292,7 @@ export default function Home() {
                 <th>
                   {ends.from} → {ends.to} · route
                 </th>
-                {PROVIDER_COLS.map((p) => (
+                {cols.map((p) => (
                   <th key={p.key} className={p.key === "rhea" ? "us" : ""}>
                     {p.label}
                   </th>
@@ -260,12 +310,12 @@ export default function Home() {
                         {route.from.sym} → {route.to.sym}
                       </div>
                     </td>
-                    {PROVIDER_COLS.map((p) => {
+                    {cols.map((p) => {
                       const us = p.key === "rhea" ? " us" : "";
                       if (row === "loading") {
                         return (
                           <td key={p.key} className={`cell${us}`}>
-                            <span className="cell-loading">…</span>
+                            <span className="spinner cell-spin" />
                           </td>
                         );
                       }
@@ -317,7 +367,7 @@ export default function Home() {
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={PROVIDER_COLS.length + 1}>
+                <td colSpan={cols.length + 1}>
                   Δ bps vs the best quote for the same input · cell shows estimated received
                   amount
                   <span className="legend-dot" style={{ background: "var(--good-ring)" }} />
@@ -334,4 +384,8 @@ export default function Home() {
       </div>
     </>
   );
+}
+
+export function getServerSideProps() {
+  return { props: { bungeeEnabled: !!process.env.SOCKET_API_KEY } };
 }

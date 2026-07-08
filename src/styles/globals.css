@@ -51,7 +51,16 @@ body {
 .dir-toggle b { font-weight: 700; }
 .dir-arrow { color: var(--muted); }
 .dir-swap { margin-left: 4px; padding-left: 10px; border-left: 1px solid var(--line); color: var(--accent); font-size: 15px; font-weight: 700; }
-.refresh-btn:disabled { opacity: 0.5; cursor: default; }
+.refresh-btn:hover { background: #2065b8; }
+.refresh-btn.stop { background: var(--surface); color: var(--bad); border: 1px solid var(--bad); }
+.refresh-btn.stop:hover { background: #fbecec; }
+
+/* spinner */
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: -2px; }
+.cell-spin { width: 11px; height: 11px; }
+.running-tag { display: inline-flex; align-items: center; gap: 7px; color: var(--accent); font-weight: 600; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2s; } }
 
 /* token-in amount */
 .amt-form { display: flex; align-items: stretch; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 2px rgba(20, 23, 28, 0.05); transition: border-color 0.15s, box-shadow 0.15s; }
