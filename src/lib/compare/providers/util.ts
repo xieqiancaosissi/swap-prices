@@ -25,11 +25,13 @@ const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 const BACKOFFS_MS = [3_000, 8_000];
 
 /**
- * Hosts that kept returning 429 after retries get a cooldown during which
- * we fail fast (single attempt), so one exhausted provider can't stall a
- * whole matrix refresh behind backoff sleeps.
+ * Hosts that kept returning 429 after retries get a short cooldown during which
+ * we fail fast (single attempt), so one exhausted provider can't stall a whole
+ * matrix refresh behind backoff sleeps. Kept short so a transient 429 (common on
+ * the shared Rango demo key) self-heals within a refresh or two rather than
+ * blacking out the column for minutes.
  */
-const BREAKER_MS = 180_000;
+const BREAKER_MS = 60_000;
 const brokenUntil = new Map<string, number>();
 
 export async function fetchJson(
