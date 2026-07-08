@@ -44,3 +44,5 @@ next-env.d.ts
 
 # user screenshots for chat communication, not project assets
 screen/
+.dev.vars
+.wrangler/
