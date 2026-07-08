@@ -410,28 +410,32 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                       if (quote.status === "error") {
                         return (
                           <td key={p.key} className={`cell${us}`}>
-                            {copyBtn}
-                            <span className="cell-err" title={quote.error}>
-                              {errLabel(quote.error)}
-                            </span>
+                            <div className="cell-top">
+                              <span className="cell-err" title={quote.error}>
+                                {errLabel(quote.error)}
+                              </span>
+                              {copyBtn}
+                            </div>
                           </td>
                         );
                       }
                       return (
                         <td key={p.key} className={`cell${us}`}>
-                          {copyBtn}
-                          {isBest ? (
-                            <span className="best-pill" title={quote.routeName}>
-                              BEST
-                            </span>
-                          ) : (
-                            <div
-                              className={`bps num ${bps !== null && bps >= -5 ? "near" : "lag"}`}
-                              title={quote.routeName}
-                            >
-                              {bps?.toFixed(1)}
-                            </div>
-                          )}
+                          <div className="cell-top">
+                            {isBest ? (
+                              <span className="best-pill" title={quote.routeName}>
+                                BEST
+                              </span>
+                            ) : (
+                              <span
+                                className={`bps num ${bps !== null && bps >= -5 ? "near" : "lag"}`}
+                                title={quote.routeName}
+                              >
+                                {bps?.toFixed(1)}
+                              </span>
+                            )}
+                            {copyBtn}
+                          </div>
                           <div className="amt num">
                             {fmtAmount(quote.amountOutHuman ?? 0, route.to.sym)} {route.to.sym}
                           </div>

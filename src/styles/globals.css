@@ -100,8 +100,8 @@ body {
 .bps.near { color: var(--ink2); font-weight: 600; }
 .bps.lag { color: var(--bad); }
 .best-pill { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; color: var(--good); background: var(--good-wash); border: 1px solid var(--good-ring); border-radius: 99px; padding: 1px 7px; margin-bottom: 2px; }
-.cell { position: relative; }
-.copy-btn { position: absolute; top: 5px; left: 6px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 11px; line-height: 1; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; opacity: 0; transition: opacity 0.12s; }
+.cell-top { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+.copy-btn { flex: none; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; cursor: pointer; opacity: 0; transition: opacity 0.12s; }
 .mx tbody tr:hover .copy-btn { opacity: 1; }
 .copy-btn:hover { color: var(--accent); border-color: var(--accent); }
 .copy-btn.copied { opacity: 1; color: var(--good); border-color: var(--good-ring); }
