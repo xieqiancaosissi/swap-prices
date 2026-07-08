@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from "next";
-import { ROUTES, TIERS } from "@/lib/compare/config";
+import { routeById } from "@/lib/compare/config";
 import { runCompare } from "@/lib/compare/run";
 import type { CompareResult } from "@/lib/compare/types";
 
@@ -9,24 +9,18 @@ const cache = new Map<string, { at: number; promise: Promise<CompareResult> }>()
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   const routeId = String(req.query.route ?? "");
-  const tier = Number(req.query.tier ?? 1); // legacy preset fallback when no amount given
+  const amount = String(req.query.amount ?? "");
 
-  const route = ROUTES.find((r) => r.id === routeId);
+  const route = routeById(routeId);
   if (!route) return res.status(400).json({ error: `unknown route: ${routeId}` });
-  if (!Number.isInteger(tier) || tier < 0 || tier >= TIERS.length) {
-    return res.status(400).json({ error: `tier must be 0..${TIERS.length - 1}` });
-  }
-
-  // optional custom input amount (human units of the route's from-token)
-  const amountRaw = req.query.amount ? String(req.query.amount) : undefined;
-  if (amountRaw && (!/^\d{1,12}(\.\d{1,18})?$/.test(amountRaw) || Number(amountRaw) <= 0)) {
+  if (!/^\d{1,12}(\.\d{1,18})?$/.test(amount) || Number(amount) <= 0) {
     return res.status(400).json({ error: "amount must be a positive decimal" });
   }
 
-  const key = `${routeId}:${tier}:${amountRaw ?? ""}`;
+  const key = `${routeId}:${amount}`;
   const hit = cache.get(key);
   const fresh = hit && Date.now() - hit.at < CACHE_TTL_MS;
-  const entry = fresh ? hit : { at: Date.now(), promise: runCompare(route, tier, amountRaw) };
+  const entry = fresh ? hit : { at: Date.now(), promise: runCompare(route, amount) };
   if (!fresh) cache.set(key, entry);
 
   try {

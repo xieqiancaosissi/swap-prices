@@ -1,20 +1,20 @@
 import Head from "next/head";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ROUTES } from "@/lib/compare/config";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PAIRS, endpointsOf, routesFor, type Direction } from "@/lib/compare/config";
+import type { CompareResult, ProviderKey, ProviderQuote, RouteDef } from "@/lib/compare/types";
 
 const DEFAULT_AMOUNT = "1";
-import type { CompareResult, ProviderKey, ProviderQuote, RouteDef } from "@/lib/compare/types";
+const DEFAULT_PAIR = "usdt-usdc";
 
 const PROVIDER_COLS: Array<{ key: ProviderKey; label: string }> = [
   { key: "rhea", label: "Rhea (us)" },
   { key: "lifi", label: "LiFi / Jumper" },
-  { key: "bungee", label: "Bungee" },
-  { key: "rango", label: "Rango" },
   { key: "swapkit", label: "SwapKit" },
   { key: "kyber", label: "Kyber" },
+  { key: "rango", label: "Rango" },
+  { key: "bungee", label: "Bungee" },
 ];
 
-const PAIR_LABEL = (r: RouteDef) => `${r.from.sym} → ${r.to.sym}`;
 const CHAIN_LABEL = (r: RouteDef) =>
   r.from.chain === r.to.chain
     ? `${r.from.chain} (same-chain)`
@@ -55,25 +55,31 @@ function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
 }
 
 export default function Home() {
+  const [pairId, setPairId] = useState(DEFAULT_PAIR);
+  const [dir, setDir] = useState<Direction>("forward");
   const [amtInput, setAmtInput] = useState(DEFAULT_AMOUNT);
-  const [activeAmt, setActiveAmt] = useState(DEFAULT_AMOUNT); // amount behind the current table
+  const [activeAmt, setActiveAmt] = useState(DEFAULT_AMOUNT);
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
   const runId = useRef(0);
 
-  const refresh = useCallback(async (amount: string) => {
+  const pair = PAIRS.find((p) => p.id === pairId)!;
+  const ends = endpointsOf(pair, dir);
+  const routes = useMemo(() => routesFor(pairId, dir), [pairId, dir]);
+
+  const refresh = useCallback(async (routeList: RouteDef[], amount: string) => {
     const id = ++runId.current;
     setRunning(true);
-    setRows(Object.fromEntries(ROUTES.map((r) => [r.id, "loading" as const])));
+    setRows(Object.fromEntries(routeList.map((r) => [r.id, "loading" as const])));
 
     // small concurrency to stay friendly with everyone's rate limits
-    const queue = [...ROUTES];
+    const queue = [...routeList];
     const worker = async () => {
       for (let r = queue.shift(); r; r = queue.shift()) {
         try {
           const res = await fetch(
-            `/api/compare?route=${r.id}&amount=${encodeURIComponent(amount)}`,
+            `/api/compare?route=${encodeURIComponent(r.id)}&amount=${encodeURIComponent(amount)}`,
           );
           const data: CompareResult = await res.json();
           if (runId.current !== id) return;
@@ -84,7 +90,7 @@ export default function Home() {
         }
       }
     };
-    await Promise.all([worker(), worker()]);
+    await Promise.all([worker(), worker(), worker()]);
     if (runId.current === id) {
       setRunning(false);
       setUpdatedAt(new Date().toLocaleTimeString("en-GB"));
@@ -92,22 +98,23 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // initial load, deferred out of the effect body
-    const t = setTimeout(() => refresh(DEFAULT_AMOUNT), 0);
+    // load whenever pair/direction changes (and on mount), using the committed amount
+    const t = setTimeout(() => refresh(routesFor(pairId, dir), activeAmt), 0);
     return () => clearTimeout(t);
-  }, [refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairId, dir]);
 
   const amtValid = /^\d{1,12}(\.\d{1,18})?$/.test(amtInput) && Number(amtInput) > 0;
   const quote = () => {
     if (running || !amtValid) return;
     setActiveAmt(amtInput);
-    refresh(amtInput);
+    refresh(routes, amtInput);
   };
 
-  // ---- stat tiles ----
-  const loaded = ROUTES.map((r) => rows[r.id]).filter(
-    (r): r is CompareResult => !!r && r !== "loading",
-  );
+  // ---- stat tiles (over the current pair's routes) ----
+  const loaded = routes
+    .map((r) => rows[r.id])
+    .filter((r): r is CompareResult => !!r && r !== "loading");
   const rheaCells = loaded.map((row) => ({ row, view: cellView(row, "rhea") }));
   const rheaQuoted = rheaCells.filter((c) => c.view.bps !== null);
   const bestCount = rheaQuoted.filter((c) => c.view.isBest).length;
@@ -119,7 +126,7 @@ export default function Home() {
     (w, c) => (!w || (c.view.bps ?? 0) < (w.view.bps ?? 0) ? c : w),
     null,
   );
-  const worstRoute = worst ? ROUTES.find((r) => r.id === worst.row.routeId) : undefined;
+  const worstRoute = worst ? routes.find((r) => r.id === worst.row.routeId) : undefined;
   const okQuotes = loaded.flatMap((r) => r.quotes).filter((q) => q.status === "ok").length;
   const totalQuotes = loaded.length * PROVIDER_COLS.length;
 
@@ -135,6 +142,47 @@ export default function Home() {
             <span>vs 5 aggregators</span>
           </div>
           <div className="bench-spacer" />
+          <div className="stamp">
+            {running
+              ? "fetching live quotes…"
+              : updatedAt
+                ? `input ${activeAmt} ${ends.from} · updated ${updatedAt}`
+                : ""}
+          </div>
+          <button
+            className="refresh-btn"
+            disabled={running}
+            onClick={() => refresh(routes, activeAmt)}
+          >
+            {running ? "Refreshing…" : "Refresh now"}
+          </button>
+        </div>
+
+        <div className="controls">
+          <div className="seg pairs">
+            {PAIRS.map((p) => (
+              <button
+                key={p.id}
+                className={p.id === pairId ? "on" : ""}
+                disabled={running}
+                onClick={() => p.id !== pairId && setPairId(p.id)}
+              >
+                {p.a} · {p.b}
+              </button>
+            ))}
+          </div>
+          <button
+            className="dir-toggle"
+            disabled={running}
+            onClick={() => setDir((d) => (d === "forward" ? "reverse" : "forward"))}
+            title="swap direction"
+          >
+            <b>{ends.from}</b>
+            <span className="dir-arrow">→</span>
+            <b>{ends.to}</b>
+            <span className="dir-swap">⇄</span>
+          </button>
+          <div className="bench-spacer" />
           <div className={`amt-form ${amtValid ? "" : "invalid"}`}>
             <span className="amt-label">Token in</span>
             <input
@@ -144,22 +192,12 @@ export default function Home() {
               placeholder="e.g. 0.1"
               onChange={(e) => setAmtInput(e.target.value.trim())}
               onKeyDown={(e) => e.key === "Enter" && quote()}
-              title="amount of each route's input token (BTC routes get this many BTC, USDT routes this many USDT, …)"
+              title={`amount of ${ends.from} to swap on every route`}
             />
             <button disabled={running || !amtValid} onClick={quote}>
               Quote
             </button>
           </div>
-          <div className="stamp">
-            {running
-              ? "fetching live quotes…"
-              : updatedAt
-                ? `input = ${activeAmt} of each route's token · updated ${updatedAt}`
-                : ""}
-          </div>
-          <button className="refresh-btn" disabled={running} onClick={() => refresh(activeAmt)}>
-            {running ? "Refreshing…" : "Refresh now"}
-          </button>
         </div>
 
         <div className="tiles">
@@ -185,9 +223,7 @@ export default function Home() {
               {worst ? (worst.view.bps ?? 0).toFixed(1) : "—"}
               <small>bps</small>
             </div>
-            <div className="sub">
-              {worstRoute ? `${PAIR_LABEL(worstRoute)} · ${CHAIN_LABEL(worstRoute)}` : ""}
-            </div>
+            <div className="sub">{worstRoute ? CHAIN_LABEL(worstRoute) : ""}</div>
           </div>
           <div className="tile">
             <div className="lab">Quotes in snapshot</div>
@@ -203,7 +239,9 @@ export default function Home() {
           <table className="mx">
             <thead>
               <tr>
-                <th>Route</th>
+                <th>
+                  {ends.from} → {ends.to} · route
+                </th>
                 {PROVIDER_COLS.map((p) => (
                   <th key={p.key} className={p.key === "rhea" ? "us" : ""}>
                     {p.label}
@@ -212,13 +250,15 @@ export default function Home() {
               </tr>
             </thead>
             <tbody>
-              {ROUTES.map((route) => {
+              {routes.map((route) => {
                 const row = rows[route.id];
                 return (
                   <tr key={route.id}>
                     <td className="route-cell">
-                      <b>{PAIR_LABEL(route)}</b>
-                      <div className="chains">{CHAIN_LABEL(route)}</div>
+                      <b>{CHAIN_LABEL(route)}</b>
+                      <div className="chains">
+                        {route.from.sym} → {route.to.sym}
+                      </div>
                     </td>
                     {PROVIDER_COLS.map((p) => {
                       const us = p.key === "rhea" ? " us" : "";
@@ -285,8 +325,7 @@ export default function Home() {
                   <span className="legend-dot" style={{ background: "#9aa0ab" }} />
                   within 5 bps
                   <span className="legend-dot" style={{ background: "var(--bad)" }} />
-                  behind &gt;5 bps · Kyber quotes same-chain routes only · SwapKit pending API
-                  key
+                  behind &gt;5 bps · Kyber quotes same-chain EVM routes only
                 </td>
               </tr>
             </tfoot>

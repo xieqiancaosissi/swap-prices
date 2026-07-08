@@ -55,7 +55,6 @@ export interface ProviderQuote {
 
 export interface CompareResult {
   routeId: string;
-  tier: number;
   amountInHuman: string;
   quotes: ProviderQuote[];
   fetchedAt: string;

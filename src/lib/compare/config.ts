@@ -57,37 +57,63 @@ export const addressFor = (chain: ChainKey): string =>
       ? PLACEHOLDER_ADDRESS.solana
       : PLACEHOLDER_ADDRESS.evm;
 
-/** ~USD tiers; input amounts are fixed per asset so quotes stay comparable */
-export const TIERS = [
-  { label: "$100", amounts: { BTC: "0.0016", ETH: "0.056", USDT: "100", USDC: "100" } },
-  { label: "$5,000", amounts: { BTC: "0.08", ETH: "2.8", USDT: "5000", USDC: "5000" } },
-  { label: "$50,000", amounts: { BTC: "0.8", ETH: "28", USDT: "50000", USDC: "50000" } },
-] as const;
+/** which chains each asset natively lives on (drives valid from/to combos) */
+export const ASSET_CHAINS: Record<AssetSym, ChainKey[]> = {
+  BTC: ["bitcoin"],
+  ETH: ["ethereum", "arbitrum", "base"],
+  USDT: ["ethereum", "arbitrum", "base", "bsc", "solana"],
+  USDC: ["ethereum", "arbitrum", "base", "bsc", "solana"],
+};
 
-const route = (
-  id: string,
-  from: [ChainKey, AssetSym],
-  to: [ChainKey, AssetSym],
-): RouteDef => ({
-  id,
-  from: { chain: from[0], sym: from[1] },
-  to: { chain: to[0], sym: to[1] },
-});
+export type Direction = "forward" | "reverse";
 
-export const ROUTES: RouteDef[] = [
-  route("btc-eth", ["bitcoin", "BTC"], ["ethereum", "ETH"]),
-  route("eth-btc", ["ethereum", "ETH"], ["bitcoin", "BTC"]),
-  route("btc-usdt-eth", ["bitcoin", "BTC"], ["ethereum", "USDT"]),
-  route("btc-usdt-arb", ["bitcoin", "BTC"], ["arbitrum", "USDT"]),
-  route("eth-usdt-same", ["ethereum", "ETH"], ["ethereum", "USDT"]),
-  route("eth-usdt-arb", ["ethereum", "ETH"], ["arbitrum", "USDT"]),
-  route("usdt-usdc-eth", ["ethereum", "USDT"], ["ethereum", "USDC"]),
-  route("usdt-usdc-arb", ["arbitrum", "USDT"], ["arbitrum", "USDC"]),
-  route("usdt-usdc-base", ["base", "USDT"], ["base", "USDC"]),
-  route("usdt-usdc-bsc", ["bsc", "USDT"], ["bsc", "USDC"]),
-  route("usdt-usdc-sol", ["solana", "USDT"], ["solana", "USDC"]),
-  route("usdt-usdc-cross", ["ethereum", "USDT"], ["arbitrum", "USDC"]),
+export interface PairDef {
+  id: string;
+  a: AssetSym;
+  b: AssetSym;
+}
+
+export const PAIRS: PairDef[] = [
+  { id: "btc-eth", a: "BTC", b: "ETH" },
+  { id: "btc-usdt", a: "BTC", b: "USDT" },
+  { id: "eth-usdt", a: "ETH", b: "USDT" },
+  { id: "usdt-usdc", a: "USDT", b: "USDC" },
 ];
+
+/** direction-aware from/to symbols for a pair */
+export function endpointsOf(pair: PairDef, dir: Direction): { from: AssetSym; to: AssetSym } {
+  return dir === "forward" ? { from: pair.a, to: pair.b } : { from: pair.b, to: pair.a };
+}
+
+/** all valid source-chain → target-chain routes for a pair+direction (incl. cross-chain) */
+export function routesFor(pairId: string, dir: Direction): RouteDef[] {
+  const pair = PAIRS.find((p) => p.id === pairId);
+  if (!pair) return [];
+  const { from: fromSym, to: toSym } = endpointsOf(pair, dir);
+  const routes: RouteDef[] = [];
+  for (const fromChain of ASSET_CHAINS[fromSym]) {
+    for (const toChain of ASSET_CHAINS[toSym]) {
+      routes.push({
+        id: `${pairId}:${dir}:${fromChain}:${toChain}`,
+        from: { chain: fromChain, sym: fromSym },
+        to: { chain: toChain, sym: toSym },
+      });
+    }
+  }
+  return routes;
+}
+
+/** full registry indexed by id, for API lookup */
+const ALL_ROUTES = new Map<string, RouteDef>();
+for (const p of PAIRS) {
+  for (const d of ["forward", "reverse"] as Direction[]) {
+    for (const r of routesFor(p.id, d)) ALL_ROUTES.set(r.id, r);
+  }
+}
+
+export function routeById(id: string): RouteDef | undefined {
+  return ALL_ROUTES.get(id);
+}
 
 export const tokenOf = (ref: { chain: ChainKey; sym: AssetSym }): TokenSpec => {
   const t = TOKENS[ref.chain][ref.sym];

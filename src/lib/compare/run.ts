@@ -1,4 +1,4 @@
-import { TIERS, toBaseUnits, tokenOf } from "./config";
+import { toBaseUnits, tokenOf } from "./config";
 import { quoteBungee } from "./providers/bungee";
 import { quoteKyber } from "./providers/kyber";
 import { quoteLifi } from "./providers/lifi";
@@ -25,12 +25,7 @@ export const PROVIDER_ORDER: ProviderKey[] = [
   "kyber",
 ];
 
-export async function runCompare(
-  route: RouteDef,
-  tier: number,
-  amountOverride?: string,
-): Promise<CompareResult> {
-  const amountInHuman = amountOverride ?? TIERS[tier].amounts[route.from.sym];
+export async function runCompare(route: RouteDef, amountInHuman: string): Promise<CompareResult> {
   const req: QuoteRequest = {
     route,
     amountInHuman,
@@ -53,7 +48,6 @@ export async function runCompare(
 
   return {
     routeId: route.id,
-    tier,
     amountInHuman,
     quotes,
     fetchedAt: new Date().toISOString(),
