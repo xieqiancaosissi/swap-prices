@@ -34,7 +34,7 @@ const CHAIN_LABEL = (r: RouteDef) =>
     : `${r.from.chain} → ${r.to.chain}`;
 
 function fmtAmount(v: number, sym: string): string {
-  const dp = sym === "BTC" ? 6 : sym === "ETH" ? 4 : 1;
+  const dp = sym === "BTC" ? 8 : sym === "ETH" ? 6 : 3;
   return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
