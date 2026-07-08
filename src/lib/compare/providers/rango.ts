@@ -22,6 +22,13 @@ function assetId(ref: QuoteRequest["route"]["from"]): string {
   return spec.address ? `${chain}.${ref.sym}--${spec.address}` : `${chain}.${ref.sym}`;
 }
 
+/**
+ * Swapper groups whose quotes don't deliver the native destination asset.
+ * Flashnet settles "BTC" on Spark (bitcoin L2), skipping L1 network/bridge
+ * fees, so its near-mid-market quotes aren't comparable to real BTC payouts.
+ */
+const EXCLUDED_SWAPPER_GROUPS = ["Flashnet"];
+
 export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
   const apiKey = process.env.RANGO_API_KEY;
   if (!apiKey) return { provider: "rango", status: "error", error: "RANGO_API_KEY not set" };
@@ -31,6 +38,8 @@ export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
     from: assetId(route.from),
     to: assetId(route.to),
     amount: amountIn,
+    swapperGroups: EXCLUDED_SWAPPER_GROUPS.join(","),
+    swappersGroupsExclude: "true",
     apiKey,
   });
 
