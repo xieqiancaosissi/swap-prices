@@ -22,9 +22,15 @@ function tokenId(ref: QuoteRequest["route"]["from"]): string {
   return NATIVE[ref.chain] ?? "0x0000000000000000000000000000000000000000";
 }
 
+/**
+ * Quoted from the BROWSER, not the server: api.rhea.finance's Cloudflare
+ * 403s datacenter egress (Vercel) regardless of headers, but its CORS is
+ * wide open and viewers' residential IPs pass fine. NEXT_PUBLIC_ inlines
+ * the JWT into the client bundle — same exposure as the main dapp.
+ */
 export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
-  const jwt = process.env.RHEA_JWT;
-  if (!jwt) return { provider: "rhea", status: "error", error: "RHEA_JWT not set" };
+  const jwt = process.env.NEXT_PUBLIC_RHEA_JWT ?? process.env.RHEA_JWT;
+  if (!jwt) return { provider: "rhea", status: "error", error: "NEXT_PUBLIC_RHEA_JWT not set" };
 
   const { route, amountIn } = req;
   const { ok, status, body, curl } = await throttled("rhea", 300, () =>

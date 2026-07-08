@@ -1,6 +1,14 @@
 import Head from "next/head";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PAIRS, endpointsOf, routesFor, type Direction } from "@/lib/compare/config";
+import {
+  PAIRS,
+  endpointsOf,
+  routesFor,
+  toBaseUnits,
+  tokenOf,
+  type Direction,
+} from "@/lib/compare/config";
+import { quoteRhea } from "@/lib/compare/providers/rhea";
 import type {
   AssetSym,
   CompareResult,
@@ -73,6 +81,23 @@ function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
 }
 
 const isValidAmount = (v: string) => /^\d{1,12}(\.\d{1,18})?$/.test(v) && Number(v) > 0;
+
+/** rhea is quoted straight from the browser — our own Cloudflare 403s Vercel's egress */
+async function quoteRheaClient(route: RouteDef, amount: string): Promise<ProviderQuote> {
+  try {
+    return await quoteRhea({
+      route,
+      amountInHuman: amount,
+      amountIn: toBaseUnits(amount, tokenOf(route.from).decimals),
+    });
+  } catch (e) {
+    return {
+      provider: "rhea",
+      status: "error",
+      error: e instanceof Error ? e.message : String(e),
+    };
+  }
+}
 
 function CopyBtn({
   curl,
@@ -162,12 +187,18 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
         if (!route) return;
         setRows((prev) => (runId.current === id ? { ...prev, [route.id]: "loading" } : prev));
         try {
-          const res = await fetch(
-            `/api/compare?route=${encodeURIComponent(route.id)}&amount=${encodeURIComponent(amount)}`,
-            { signal: ac.signal },
-          );
-          const data: CompareResult = await res.json();
+          const [server, rheaQuote] = await Promise.all([
+            fetch(
+              `/api/compare?route=${encodeURIComponent(route.id)}&amount=${encodeURIComponent(amount)}`,
+              { signal: ac.signal },
+            ).then((res) => res.json() as Promise<CompareResult>),
+            quoteRheaClient(route, amount),
+          ]);
           if (runId.current !== id) return;
+          const data: CompareResult = {
+            ...server,
+            quotes: [rheaQuote, ...(server.quotes ?? []).filter((q) => q.provider !== "rhea")],
+          };
           setRows((prev) => ({ ...prev, [route.id]: data }));
         } catch {
           if (runId.current !== id || ac.signal.aborted) return;

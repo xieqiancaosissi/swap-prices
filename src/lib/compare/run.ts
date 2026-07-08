@@ -29,7 +29,9 @@ export const PROVIDER_ORDER: ProviderKey[] = [
 export const bungeeEnabled = () => !!process.env.SOCKET_API_KEY;
 
 export function activeProviders(): ProviderKey[] {
-  return PROVIDER_ORDER.filter((k) => k !== "bungee" || bungeeEnabled());
+  // rhea is quoted client-side (see providers/rhea.ts) — its Cloudflare
+  // blocks server egress from Vercel, so the API route skips it
+  return PROVIDER_ORDER.filter((k) => k !== "rhea" && (k !== "bungee" || bungeeEnabled()));
 }
 
 export async function runCompare(route: RouteDef, amountInHuman: string): Promise<CompareResult> {

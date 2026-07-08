@@ -16,14 +16,14 @@ Open http://localhost:3000, enter a token-in amount and hit Quote. The amount ap
 each route's input token (BTC routes quote that many BTC, USDT routes that many USDT, …).
 
 **Without API keys most columns will show `429` after a couple of refreshes** — the
-keyless public endpoints have tiny shared rate limits. `RHEA_JWT` is required; the LiFi,
+keyless public endpoints have tiny shared rate limits. `NEXT_PUBLIC_RHEA_JWT` is required; the LiFi,
 Socket and Rango keys are all free and self-service and remove the 429s.
 
 ### Getting the keys (all free)
 
 | Var | Where to get it | Effort | Effect |
 |-----|-----------------|--------|--------|
-| `RHEA_JWT` | copy from `multi-chain-lending` → `src/services/api/swap.ts` | — | **required** — Rhea column |
+| `NEXT_PUBLIC_RHEA_JWT` | copy from `multi-chain-lending` → `src/services/api/swap.ts` | — | **required** — Rhea column (quoted from the browser; ships in the client bundle) |
 | `LIFI_API_KEY` | [portal.li.fi](https://portal.li.fi) → sign in → Create API key | instant | 75 req/2h → 100 req/min |
 | `SOCKET_API_KEY` | [docs.socket.tech](https://docs.socket.tech) → "Get API Access" → Google form | short review | dedicated 20 rps |
 | `RANGO_API_KEY` | Rango Discord → users-support → open a ticket (B2B use) | 1–2 days | replaces the shared demo key |
