@@ -30,17 +30,20 @@ export async function quoteSwapkit(req: QuoteRequest): Promise<ProviderQuote> {
   }
 
   const { route, amountInHuman } = req;
-  const { ok, status, body } = await throttled("swapkit", 600, () =>
-    fetchJson("https://api.swapkit.dev/v3/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey },
-      body: JSON.stringify({
-        sellAsset: assetId(route.from),
-        buyAsset: assetId(route.to),
-        sellAmount: amountInHuman, // human-readable per docs (unlike the others)
-        slippage: 1,
-      }),
-    }),
+  const { ok, status, body, curl } = await throttled("swapkit", 600, () =>
+    fetchJson(
+      "https://api.swapkit.dev/v3/quote",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+        body: JSON.stringify({
+          sellAsset: assetId(route.from),
+          buyAsset: assetId(route.to),
+          sellAmount: amountInHuman, // human-readable per docs (unlike the others)
+          slippage: 1,
+        }),
+      },
+    ),
   );
 
   const b = body as {
@@ -57,6 +60,7 @@ export async function quoteSwapkit(req: QuoteRequest): Promise<ProviderQuote> {
       provider: "swapkit",
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
+      curl,
     };
   }
 
@@ -66,5 +70,6 @@ export async function quoteSwapkit(req: QuoteRequest): Promise<ProviderQuote> {
     amountOutHuman: Number(best.expectedBuyAmount),
     durationSec: best.estimatedTime?.total,
     routeName: best.providers?.join("+"),
+    curl,
   };
 }

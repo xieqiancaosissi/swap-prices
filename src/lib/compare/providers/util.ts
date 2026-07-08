@@ -20,6 +20,18 @@ export function throttled<T>(key: string, minGapMs: number, fn: () => Promise<T>
   });
 }
 
+/** reproduce a fetch call as a copy-paste-runnable curl (real keys included) */
+export function buildCurl(url: string, init: RequestInit): string {
+  const parts = [`curl '${url}'`];
+  if (init.method && init.method !== "GET") parts.push(`-X ${init.method}`);
+  const headers = (init.headers as Record<string, string>) ?? {};
+  for (const [k, v] of Object.entries(headers)) {
+    parts.push(`-H '${k}: ${v}'`);
+  }
+  if (init.body) parts.push(`-d '${String(init.body)}'`);
+  return parts.join(" ");
+}
+
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
 const BACKOFFS_MS = [3_000, 8_000];
@@ -37,7 +49,8 @@ const brokenUntil = new Map<string, number>();
 export async function fetchJson(
   url: string,
   init: RequestInit = {},
-): Promise<{ ok: boolean; status: number; body: unknown }> {
+): Promise<{ ok: boolean; status: number; body: unknown; curl: string }> {
+  const curl = buildCurl(url, init);
   const host = new URL(url).host;
   const tripped = (brokenUntil.get(host) ?? 0) > Date.now();
 
@@ -57,7 +70,7 @@ export async function fetchJson(
   } catch {
     body = await res.text().catch(() => null);
   }
-  return { ok: res.ok, status: res.status, body };
+  return { ok: res.ok, status: res.status, body, curl };
 }
 
 export function errMessage(body: unknown, fallback: string): string {

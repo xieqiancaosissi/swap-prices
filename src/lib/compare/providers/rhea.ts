@@ -27,24 +27,27 @@ export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
   if (!jwt) return { provider: "rhea", status: "error", error: "RHEA_JWT not set" };
 
   const { route, amountIn } = req;
-  const { ok, status, body } = await throttled("rhea", 300, () =>
-    fetchJson("https://api.rhea.finance/api/swap/quote", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${jwt}`,
+  const { ok, status, body, curl } = await throttled("rhea", 300, () =>
+    fetchJson(
+      "https://api.rhea.finance/api/swap/quote",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${jwt}`,
+        },
+        body: JSON.stringify({
+          fromChain: CHAIN_ID[route.from.chain],
+          toChain: CHAIN_ID[route.to.chain],
+          tokenIn: tokenId(route.from),
+          tokenOut: tokenId(route.to),
+          amountIn,
+          slippage: 100, // 1%
+          sender: addressFor(route.from.chain),
+          recipient: addressFor(route.to.chain),
+        }),
       },
-      body: JSON.stringify({
-        fromChain: CHAIN_ID[route.from.chain],
-        toChain: CHAIN_ID[route.to.chain],
-        tokenIn: tokenId(route.from),
-        tokenOut: tokenId(route.to),
-        amountIn,
-        slippage: 100, // 1%
-        sender: addressFor(route.from.chain),
-        recipient: addressFor(route.to.chain),
-      }),
-    }),
+    ),
   );
 
   const b = body as {
@@ -65,13 +68,14 @@ export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
       provider: "rhea",
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
+      curl,
     };
   }
 
   const best = b.data?.bestQuote;
   const amountOut = best?.amountOut ?? best?.estimatedOut;
   if (!best?.router || !amountOut) {
-    return { provider: "rhea", status: "error", error: "no route in bestQuote" };
+    return { provider: "rhea", status: "error", error: "no route in bestQuote", curl };
   }
 
   return {
@@ -81,5 +85,6 @@ export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
     amountOutHuman: fromBaseUnits(amountOut, tokenOf(route.to).decimals),
     durationSec: best.timeEstimate,
     routeName: best.router,
+    curl,
   };
 }

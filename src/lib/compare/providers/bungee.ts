@@ -38,7 +38,7 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
   // shared public-endpoint limits
   const apiKey = process.env.SOCKET_API_KEY;
   const host = apiKey ? "https://dedicated-backend.socket.tech" : "https://public-backend.socket.tech";
-  const { ok, status, body } = await throttled("bungee", 2_000, () =>
+  const { ok, status, body, curl } = await throttled("bungee", 2_000, () =>
     fetchJson(`${host}/v3/swap/quote?${params}`, {
       headers: apiKey ? { "x-api-key": apiKey } : {},
     }),
@@ -60,12 +60,13 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
       provider: "bungee",
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
+      curl,
     };
   }
 
   const best = b.result?.routes?.[0];
   if (!best?.output?.amount) {
-    return { provider: "bungee", status: "error", error: "no route available" };
+    return { provider: "bungee", status: "error", error: "no route available", curl };
   }
 
   return {
@@ -75,5 +76,6 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
     amountOutHuman: fromBaseUnits(best.output.amount, tokenOf(route.to).decimals),
     durationSec: best.estimatedTime,
     routeName: best.routeDetails?.bridgeDetails?.protocol?.name,
+    curl,
   };
 }

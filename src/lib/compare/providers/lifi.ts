@@ -39,7 +39,7 @@ export async function quoteLifi(req: QuoteRequest): Promise<ProviderQuote> {
   const headers: Record<string, string> = {};
   if (process.env.LIFI_API_KEY) headers["x-lifi-api-key"] = process.env.LIFI_API_KEY;
 
-  const { ok, status, body } = await throttled("lifi", 600, () =>
+  const { ok, status, body, curl } = await throttled("lifi", 600, () =>
     fetchJson(`https://li.quest/v1/quote?${params}`, { headers }),
   );
 
@@ -53,6 +53,7 @@ export async function quoteLifi(req: QuoteRequest): Promise<ProviderQuote> {
       provider: "lifi",
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
+      curl,
     };
   }
 
@@ -63,5 +64,6 @@ export async function quoteLifi(req: QuoteRequest): Promise<ProviderQuote> {
     amountOutHuman: fromBaseUnits(b.estimate.toAmount, tokenOf(route.to).decimals),
     durationSec: b.estimate.executionDuration,
     routeName: b.tool,
+    curl,
   };
 }

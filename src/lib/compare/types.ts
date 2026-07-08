@@ -51,6 +51,8 @@ export interface ProviderQuote {
   durationSec?: number;
   routeName?: string;
   error?: string;
+  /** copy-paste-runnable curl reproducing this call (real keys included) */
+  curl?: string;
 }
 
 export interface CompareResult {

@@ -70,6 +70,49 @@ function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
 
 const isValidAmount = (v: string) => /^\d{1,12}(\.\d{1,18})?$/.test(v) && Number(v) > 0;
 
+function CopyBtn({
+  curl,
+  active,
+  onCopy,
+}: {
+  curl: string;
+  active: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <button
+      className={`copy-btn ${active ? "copied" : ""}`}
+      title="Copy the curl for this quote"
+      onClick={(e) => {
+        e.stopPropagation();
+        onCopy();
+      }}
+    >
+      {active ? (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <path
+            d="M13 4.5 6.5 11 3 7.5"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+          <path
+            d="M10.5 5.5V4A1.5 1.5 0 0 0 9 2.5H4A1.5 1.5 0 0 0 2.5 4v5A1.5 1.5 0 0 0 4 10.5h1.5"
+            stroke="currentColor"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </button>
+  );
+}
+
 export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
   const cols = useMemo(
     () => ALL_COLS.filter((c) => c.key !== "bungee" || bungeeEnabled),
@@ -83,8 +126,15 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
   const [rows, setRows] = useState<Record<string, RowState>>({});
   const [running, setRunning] = useState(false);
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const runId = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
+
+  const copyCurl = (key: string, curl: string) => {
+    navigator.clipboard?.writeText(curl);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey((c) => (c === key ? null : c)), 1200);
+  };
 
   const pair = PAIRS.find((p) => p.id === pairId)!;
   const ends = endpointsOf(pair, dir);
@@ -349,9 +399,18 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                           </td>
                         );
                       }
+                      const copyKey = `${route.id}:${p.key}`;
+                      const copyBtn = quote.curl ? (
+                        <CopyBtn
+                          curl={quote.curl}
+                          active={copiedKey === copyKey}
+                          onCopy={() => copyCurl(copyKey, quote.curl!)}
+                        />
+                      ) : null;
                       if (quote.status === "error") {
                         return (
                           <td key={p.key} className={`cell${us}`}>
+                            {copyBtn}
                             <span className="cell-err" title={quote.error}>
                               {errLabel(quote.error)}
                             </span>
@@ -360,6 +419,7 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                       }
                       return (
                         <td key={p.key} className={`cell${us}`}>
+                          {copyBtn}
                           {isBest ? (
                             <span className="best-pill" title={quote.routeName}>
                               BEST
