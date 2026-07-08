@@ -103,5 +103,6 @@ body {
 .cell-na { color: #c2c6cd; font-size: 13px; }
 .cell-err { color: var(--bad); font-size: 11px; font-weight: 600; cursor: help; border-bottom: 1px dotted var(--bad); }
 .cell-loading { color: var(--muted); font-size: 12px; }
+.cell-wait { color: #c2c6cd; font-size: 15px; letter-spacing: 1px; }
 .mx tfoot td { padding: 10px 18px; font-size: 12px; color: var(--muted); background: #f8f9fa; border-top: 1px solid var(--line); text-align: left; }
 .legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin: 0 4px 0 10px; vertical-align: baseline; }

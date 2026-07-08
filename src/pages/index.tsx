@@ -38,7 +38,8 @@ function fmtAmount(v: number, sym: string): string {
   return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
-type RowState = CompareResult | "loading" | undefined;
+/** pending = queued (static …), loading = in-flight (spinner), object = done, undefined = error */
+type RowState = CompareResult | "pending" | "loading" | undefined;
 
 /** short on-cell reason so failures are diagnosable without hovering */
 function errLabel(e?: string): string {
@@ -97,23 +98,26 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
     const id = ++runId.current;
 
     setRunning(true);
-    setRows(Object.fromEntries(routeList.map((r) => [r.id, "loading" as const])));
+    // everything starts queued (static …); a worker flips a row to spinner only while fetching it
+    setRows(Object.fromEntries(routeList.map((r) => [r.id, "pending" as const])));
 
     const queue = [...routeList];
     const worker = async () => {
-      for (let r = queue.shift(); r; r = queue.shift()) {
-        if (ac.signal.aborted) return;
+      while (!ac.signal.aborted) {
+        const route = queue.shift();
+        if (!route) return;
+        setRows((prev) => (runId.current === id ? { ...prev, [route.id]: "loading" } : prev));
         try {
           const res = await fetch(
-            `/api/compare?route=${encodeURIComponent(r.id)}&amount=${encodeURIComponent(amount)}`,
+            `/api/compare?route=${encodeURIComponent(route.id)}&amount=${encodeURIComponent(amount)}`,
             { signal: ac.signal },
           );
           const data: CompareResult = await res.json();
           if (runId.current !== id) return;
-          setRows((prev) => ({ ...prev, [r.id]: data }));
+          setRows((prev) => ({ ...prev, [route.id]: data }));
         } catch {
           if (runId.current !== id || ac.signal.aborted) return;
-          setRows((prev) => ({ ...prev, [r.id]: undefined }));
+          setRows((prev) => ({ ...prev, [route.id]: undefined }));
         }
       }
     };
@@ -160,12 +164,18 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
     abortRef.current?.abort();
     runId.current++;
     setRunning(false);
+    // freeze the view: spinning + queued rows fall back to a static … (no more spinners)
+    setRows((prev) =>
+      Object.fromEntries(
+        Object.entries(prev).map(([k, v]) => [k, v === "loading" ? "pending" : v]),
+      ),
+    );
   };
 
   // ---- stat tiles (over the current pair's routes) ----
   const loaded = routes
     .map((r) => rows[r.id])
-    .filter((r): r is CompareResult => !!r && r !== "loading");
+    .filter((r): r is CompareResult => !!r && r !== "loading" && r !== "pending");
   const rheaCells = loaded.map((row) => ({ row, view: cellView(row, "rhea") }));
   const rheaQuoted = rheaCells.filter((c) => c.view.bps !== null);
   const bestCount = rheaQuoted.filter((c) => c.view.isBest).length;
@@ -312,6 +322,13 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                     </td>
                     {cols.map((p) => {
                       const us = p.key === "rhea" ? " us" : "";
+                      if (row === "pending") {
+                        return (
+                          <td key={p.key} className={`cell${us}`}>
+                            <span className="cell-wait">…</span>
+                          </td>
+                        );
+                      }
                       if (row === "loading") {
                         return (
                           <td key={p.key} className={`cell${us}`}>
