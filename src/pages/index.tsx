@@ -50,6 +50,12 @@ function fmtAmount(v: number, sym: string): string {
   return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
+/** shortfall vs best needs more precision — stablecoin gaps hide below 3dp */
+function fmtShortfall(v: number, sym: string): string {
+  const dp = sym === "BTC" ? 8 : 6;
+  return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+}
+
 /** pending = queued (static …), loading = in-flight (spinner), object = done, undefined = error */
 type RowState = CompareResult | "pending" | "loading" | undefined;
 
@@ -64,20 +70,24 @@ function errLabel(e?: string): string {
 
 interface CellView {
   quote?: ProviderQuote;
-  bps: number | null;
+  /** gap to best as a percentage (negative = behind); null when no quote */
+  pct: number | null;
+  /** token amount short of the best quote (negative), in destination units */
+  shortfall: number | null;
   isBest: boolean;
 }
 
 function cellView(row: CompareResult | undefined, key: ProviderKey): CellView {
   const quote = row?.quotes.find((q) => q.provider === key);
   if (!row || !quote || quote.status !== "ok" || !quote.amountOutHuman) {
-    return { quote, bps: null, isBest: false };
+    return { quote, pct: null, shortfall: null, isBest: false };
   }
   const best = Math.max(
     ...row.quotes.filter((q) => q.status === "ok").map((q) => q.amountOutHuman ?? 0),
   );
-  const bps = (quote.amountOutHuman / best - 1) * 10_000;
-  return { quote, bps, isBest: quote.amountOutHuman === best };
+  const pct = (quote.amountOutHuman / best - 1) * 100;
+  const shortfall = quote.amountOutHuman - best;
+  return { quote, pct, shortfall, isBest: quote.amountOutHuman === best };
 }
 
 const isValidAmount = (v: string) => /^\d{1,12}(\.\d{1,18})?$/.test(v) && Number(v) > 0;
@@ -262,14 +272,14 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
     .map((r) => rows[r.id])
     .filter((r): r is CompareResult => !!r && r !== "loading" && r !== "pending");
   const rheaCells = loaded.map((row) => ({ row, view: cellView(row, "rhea") }));
-  const rheaQuoted = rheaCells.filter((c) => c.view.bps !== null);
+  const rheaQuoted = rheaCells.filter((c) => c.view.pct !== null);
   const bestCount = rheaQuoted.filter((c) => c.view.isBest).length;
   const laggards = rheaQuoted.filter((c) => !c.view.isBest);
   const avgGap = laggards.length
-    ? laggards.reduce((s, c) => s + (c.view.bps ?? 0), 0) / laggards.length
+    ? laggards.reduce((s, c) => s + (c.view.pct ?? 0), 0) / laggards.length
     : 0;
   const worst = laggards.reduce<(typeof laggards)[number] | null>(
-    (w, c) => (!w || (c.view.bps ?? 0) < (w.view.bps ?? 0) ? c : w),
+    (w, c) => (!w || (c.view.pct ?? 0) < (w.view.pct ?? 0) ? c : w),
     null,
   );
   const worstRoute = worst ? routes.find((r) => r.id === worst.row.routeId) : undefined;
@@ -357,16 +367,16 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
           <div className="tile">
             <div className="lab">Avg gap to best</div>
             <div className="val num">
-              {laggards.length ? avgGap.toFixed(1) : "—"}
-              <small>bps</small>
+              {laggards.length ? avgGap.toFixed(2) : "—"}
+              <small>%</small>
             </div>
             <div className="sub">across {laggards.length} routes we don&apos;t lead</div>
           </div>
           <div className={`tile ${worst ? "lose" : ""}`}>
             <div className="lab">Worst gap</div>
             <div className="val num">
-              {worst ? (worst.view.bps ?? 0).toFixed(1) : "—"}
-              <small>bps</small>
+              {worst ? (worst.view.pct ?? 0).toFixed(2) : "—"}
+              <small>%</small>
             </div>
             <div className="sub">{worstRoute ? CHAIN_LABEL(worstRoute) : ""}</div>
           </div>
@@ -421,7 +431,7 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                           </td>
                         );
                       }
-                      const { quote, bps, isBest } = cellView(
+                      const { quote, pct, shortfall, isBest } = cellView(
                         row === undefined ? undefined : row,
                         p.key,
                       );
@@ -463,10 +473,10 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                               </span>
                             ) : (
                               <span
-                                className={`bps num ${bps !== null && bps >= -5 ? "near" : "lag"}`}
+                                className={`pct num ${pct !== null && pct >= -0.05 ? "near" : "lag"}`}
                                 title={quote.routeName}
                               >
-                                {bps?.toFixed(1)}
+                                {pct?.toFixed(2)}%
                               </span>
                             )}
                             {copyBtn}
@@ -474,6 +484,11 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                           <div className="amt num">
                             {fmtAmount(quote.amountOutHuman ?? 0, route.to.sym)} {route.to.sym}
                           </div>
+                          {!isBest && shortfall !== null && (
+                            <div className="short num">
+                              {fmtShortfall(shortfall, route.to.sym)} {route.to.sym} vs best
+                            </div>
+                          )}
                         </td>
                       );
                     })}
@@ -484,14 +499,14 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
             <tfoot>
               <tr>
                 <td colSpan={cols.length + 1}>
-                  Δ bps vs the best quote for the same input · cell shows estimated received
-                  amount
+                  each cell: % gap vs the best quote · estimated received amount · tokens short
+                  of best
                   <span className="legend-dot" style={{ background: "var(--good-ring)" }} />
                   best
                   <span className="legend-dot" style={{ background: "#9aa0ab" }} />
-                  within 5 bps
+                  within 0.05%
                   <span className="legend-dot" style={{ background: "var(--bad)" }} />
-                  behind &gt;5 bps · Kyber quotes same-chain EVM routes only
+                  behind &gt;0.05% · Kyber quotes same-chain EVM routes only
                 </td>
               </tr>
             </tfoot>
