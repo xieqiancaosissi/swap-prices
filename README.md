@@ -2,7 +2,7 @@
 
 Compare Rhea swap quotes against LiFi/Jumper, Bungee(Socket), Rango, SwapKit and KyberSwap
 across bitcoin / ethereum / solana / arbitrum / base / bsc for the btc-eth, btc-usdt,
-eth-usdt and usdt-usdc pairs.
+eth-usdt and usdt-usdc pairs
 
 ## Setup
 
