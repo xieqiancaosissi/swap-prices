@@ -36,10 +36,11 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
 
   // free dedicated key (20 rps, Google form via docs.socket.tech) lifts the
   // shared public-endpoint limits
+  // the key is passed to the public-backend host to lift its shared rate limits;
+  // dedicated-backend additionally requires a registered Affiliate header we don't have
   const apiKey = process.env.SOCKET_API_KEY;
-  const host = apiKey ? "https://dedicated-backend.socket.tech" : "https://public-backend.socket.tech";
-  const { ok, status, body, curl } = await throttled("bungee", 2_000, () =>
-    fetchJson(`${host}/v3/swap/quote?${params}`, {
+  const { ok, status, body, curl } = await throttled("bungee", apiKey ? 400 : 2_000, () =>
+    fetchJson(`https://public-backend.socket.tech/v3/swap/quote?${params}`, {
       headers: apiKey ? { "x-api-key": apiKey } : {},
     }),
   );
