@@ -315,13 +315,9 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
               ""
             )}
           </div>
-          {running ? (
+          {running && (
             <button className="refresh-btn stop" onClick={stop}>
               Stop
-            </button>
-          ) : (
-            <button className="refresh-btn" onClick={() => refresh(routes, activeAmt)}>
-              Refresh
             </button>
           )}
         </div>
