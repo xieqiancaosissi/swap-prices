@@ -30,7 +30,7 @@ export async function quoteSwapkit(req: QuoteRequest): Promise<ProviderQuote> {
   }
 
   const { route, amountInHuman } = req;
-  const { ok, status, body, curl } = await throttled("swapkit", 600, () =>
+  const { ok, status, body, curl, latencyMs } = await throttled("swapkit", 600, () =>
     fetchJson(
       "https://api.swapkit.dev/v3/quote",
       {
@@ -61,6 +61,7 @@ export async function quoteSwapkit(req: QuoteRequest): Promise<ProviderQuote> {
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
       curl,
+      latencyMs,
     };
   }
 
@@ -71,5 +72,6 @@ export async function quoteSwapkit(req: QuoteRequest): Promise<ProviderQuote> {
     durationSec: best.estimatedTime?.total,
     routeName: best.providers?.join("+"),
     curl,
+    latencyMs,
   };
 }

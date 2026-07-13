@@ -56,6 +56,12 @@ function fmtShortfall(v: number, sym: string): string {
   return v.toLocaleString("en-US", { minimumFractionDigits: dp, maximumFractionDigits: dp });
 }
 
+/** quote request round-trip in seconds */
+function fmtLatency(ms?: number): string | null {
+  if (ms == null) return null;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
 /** pending = queued (static …), loading = in-flight (spinner), object = done, undefined = error */
 type RowState = CompareResult | "pending" | "loading" | undefined;
 
@@ -461,6 +467,9 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                               </span>
                               {copyBtn}
                             </div>
+                            {fmtLatency(quote.latencyMs) && (
+                              <div className="latency num">⏱ {fmtLatency(quote.latencyMs)}</div>
+                            )}
                           </td>
                         );
                       }
@@ -488,6 +497,9 @@ export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
                             <div className="short num">
                               {fmtShortfall(shortfall, route.to.sym)} {route.to.sym} vs best
                             </div>
+                          )}
+                          {fmtLatency(quote.latencyMs) && (
+                            <div className="latency num">⏱ {fmtLatency(quote.latencyMs)}</div>
                           )}
                         </td>
                       );

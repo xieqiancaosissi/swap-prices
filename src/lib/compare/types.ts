@@ -51,6 +51,8 @@ export interface ProviderQuote {
   durationSec?: number;
   routeName?: string;
   error?: string;
+  /** how long the quote request itself took, in ms (our measured round-trip) */
+  latencyMs?: number;
   /** copy-paste-runnable curl reproducing this call (real keys included) */
   curl?: string;
 }

@@ -49,17 +49,25 @@ const brokenUntil = new Map<string, number>();
 export async function fetchJson(
   url: string,
   init: RequestInit = {},
-): Promise<{ ok: boolean; status: number; body: unknown; curl: string }> {
+): Promise<{ ok: boolean; status: number; body: unknown; curl: string; latencyMs: number }> {
   const curl = buildCurl(url, init);
   const host = new URL(url).host;
   const tripped = (brokenUntil.get(host) ?? 0) > Date.now();
 
-  let res = await fetch(url, { ...init, signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) });
+  // time only the request round-trip, not our own throttle/backoff waits;
+  // on retries keep the last (successful) attempt's latency
+  const timed = async () => {
+    const t0 = performance.now();
+    const r = await fetch(url, { ...init, signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) });
+    return { r, ms: performance.now() - t0 };
+  };
+
+  let { r: res, ms: latencyMs } = await timed();
   if (!tripped) {
     for (const backoff of BACKOFFS_MS) {
       if (res.status !== 429) break;
       await sleep(backoff);
-      res = await fetch(url, { ...init, signal: AbortSignal.timeout(QUOTE_TIMEOUT_MS) });
+      ({ r: res, ms: latencyMs } = await timed());
     }
   }
   if (res.status === 429) brokenUntil.set(host, Date.now() + BREAKER_MS);
@@ -70,7 +78,7 @@ export async function fetchJson(
   } catch {
     body = await res.text().catch(() => null);
   }
-  return { ok: res.ok, status: res.status, body, curl };
+  return { ok: res.ok, status: res.status, body, curl, latencyMs };
 }
 
 export function errMessage(body: unknown, fallback: string): string {

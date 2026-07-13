@@ -43,7 +43,7 @@ export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
     apiKey,
   });
 
-  const { ok, status, body, curl } = await throttled("rango", 2_500, () =>
+  const { ok, status, body, curl, latencyMs } = await throttled("rango", 2_500, () =>
     fetchJson(`https://public-api.rango.exchange/basic/quote?${params}`),
   );
 
@@ -57,7 +57,7 @@ export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
   } | null;
 
   if (!ok) {
-    return { provider: "rango", status: "error", error: errMessage(body, `HTTP ${status}`), curl };
+    return { provider: "rango", status: "error", error: errMessage(body, `HTTP ${status}`), curl, latencyMs };
   }
   if (b?.resultType !== "OK" || !b.route?.outputAmount) {
     return {
@@ -65,6 +65,7 @@ export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
       status: "error",
       error: b?.resultType ?? "no route",
       curl,
+      latencyMs,
     };
   }
 
@@ -76,5 +77,6 @@ export async function quoteRango(req: QuoteRequest): Promise<ProviderQuote> {
     durationSec: b.route.estimatedTimeInSeconds,
     routeName: b.route.swapper?.title,
     curl,
+    latencyMs,
   };
 }

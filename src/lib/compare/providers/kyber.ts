@@ -27,7 +27,7 @@ export async function quoteKyber(req: QuoteRequest): Promise<ProviderQuote> {
     amountIn,
   });
 
-  const { ok, status, body, curl } = await throttled("kyber", 400, () =>
+  const { ok, status, body, curl, latencyMs } = await throttled("kyber", 400, () =>
     fetchJson(
       `https://aggregator-api.kyberswap.com/${CHAIN_PATH[route.from.chain]}/api/v1/routes?${params}`,
       { headers: { "x-client-id": "rhea-bench" } },
@@ -45,6 +45,7 @@ export async function quoteKyber(req: QuoteRequest): Promise<ProviderQuote> {
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
       curl,
+      latencyMs,
     };
   }
 
@@ -56,5 +57,6 @@ export async function quoteKyber(req: QuoteRequest): Promise<ProviderQuote> {
     amountOutHuman: fromBaseUnits(amountOut, tokenOf(route.to).decimals),
     routeName: "KyberSwap",
     curl,
+    latencyMs,
   };
 }

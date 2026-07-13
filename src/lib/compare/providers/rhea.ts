@@ -33,7 +33,7 @@ export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
   if (!jwt) return { provider: "rhea", status: "error", error: "NEXT_PUBLIC_RHEA_JWT not set" };
 
   const { route, amountIn } = req;
-  const { ok, status, body, curl } = await throttled("rhea", 300, () =>
+  const { ok, status, body, curl, latencyMs } = await throttled("rhea", 300, () =>
     fetchJson(
       "https://api.rhea.finance/api/swap/quote",
       {
@@ -81,13 +81,14 @@ export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
       curl,
+      latencyMs,
     };
   }
 
   const best = b.data?.bestQuote;
   const amountOut = best?.amountOut ?? best?.estimatedOut;
   if (!best?.router || !amountOut) {
-    return { provider: "rhea", status: "error", error: "no route in bestQuote", curl };
+    return { provider: "rhea", status: "error", error: "no route in bestQuote", curl, latencyMs };
   }
 
   return {
@@ -98,5 +99,6 @@ export async function quoteRhea(req: QuoteRequest): Promise<ProviderQuote> {
     durationSec: best.timeEstimate,
     routeName: best.router,
     curl,
+    latencyMs,
   };
 }

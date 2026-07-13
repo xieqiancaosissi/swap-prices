@@ -98,6 +98,7 @@ body {
 .cell .pct { font-size: 14px; font-weight: 700; }
 .cell .amt { font-size: 12px; color: var(--ink); margin-top: 3px; }
 .cell .short { font-size: 11px; color: var(--bad); opacity: 0.85; margin-top: 1px; }
+.cell .latency { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
 .pct.near { color: var(--ink2); font-weight: 600; }
 .pct.lag { color: var(--bad); }
 td.us .short { opacity: 0.95; }

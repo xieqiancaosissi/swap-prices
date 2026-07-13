@@ -39,7 +39,7 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
   // the key is passed to the public-backend host to lift its shared rate limits;
   // dedicated-backend additionally requires a registered Affiliate header we don't have
   const apiKey = process.env.SOCKET_API_KEY;
-  const { ok, status, body, curl } = await throttled("bungee", apiKey ? 400 : 2_000, () =>
+  const { ok, status, body, curl, latencyMs } = await throttled("bungee", apiKey ? 400 : 2_000, () =>
     fetchJson(`https://public-backend.socket.tech/v3/swap/quote?${params}`, {
       headers: apiKey ? { "x-api-key": apiKey } : {},
     }),
@@ -62,12 +62,13 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
       status: "error",
       error: errMessage(body, `HTTP ${status}`),
       curl,
+      latencyMs,
     };
   }
 
   const best = b.result?.routes?.[0];
   if (!best?.output?.amount) {
-    return { provider: "bungee", status: "error", error: "no route available", curl };
+    return { provider: "bungee", status: "error", error: "no route available", curl, latencyMs };
   }
 
   return {
@@ -78,5 +79,6 @@ export async function quoteBungee(req: QuoteRequest): Promise<ProviderQuote> {
     durationSec: best.estimatedTime,
     routeName: best.routeDetails?.bridgeDetails?.protocol?.name,
     curl,
+    latencyMs,
   };
 }
