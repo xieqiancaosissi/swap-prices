@@ -160,7 +160,10 @@ function CopyBtn({
 
 export default function Home({ bungeeEnabled }: { bungeeEnabled: boolean }) {
   const cols = useMemo(
-    () => ALL_COLS.filter((c) => c.key !== "bungee" || bungeeEnabled),
+    () =>
+      ALL_COLS.filter(
+        (c) => (c.key !== "bungee" || bungeeEnabled) && c.key !== "rango",
+      ),
     [bungeeEnabled],
   );
 
