@@ -35,7 +35,6 @@ const ALL_COLS: Array<{ key: ProviderKey; label: string }> = [
   { key: "rhea", label: "Rhea (us)" },
   { key: "lifi", label: "LiFi / Jumper" },
   { key: "swapkit", label: "SwapKit" },
-  { key: "rango", label: "Rango" },
   { key: "bungee", label: "Bungee" },
   { key: "kyber", label: "Kyber" },
 ];
